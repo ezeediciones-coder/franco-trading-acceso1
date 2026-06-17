@@ -1,16 +1,66 @@
 'use client';
 
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 
 export default function HomePage() {
   const [mensaje, setMensaje] = useState('');
+  const [estado, setEstado] = useState<'aprobado' | 'pendiente' | 'error' | ''>('');
+  const [cargando, setCargando] = useState(false);
 
-  function verificarUsuario(e: React.FormEvent<HTMLFormElement>) {
+  async function verificarUsuario(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    setMensaje(
-      'Datos recibidos. En el próximo paso vamos a conectar esta página con Supabase para verificar el UID.'
-    );
+    setCargando(true);
+    setMensaje('');
+    setEstado('');
+
+    const formData = new FormData(e.currentTarget);
+
+    const exchange = String(formData.get('exchange') || '');
+    const uid = String(formData.get('uid') || '');
+    const telegram = String(formData.get('telegram') || '');
+    const email = String(formData.get('email') || '');
+
+    try {
+      const response = await fetch('/api/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          exchange,
+          uid,
+          telegram_username: telegram,
+          email,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setEstado('error');
+        setMensaje(data.message || 'Ocurrió un error al verificar el UID.');
+        return;
+      }
+
+      if (data.approved) {
+        setEstado('aprobado');
+        setMensaje(
+          '✅ Verificación aprobada. Tu UID cumple con los requisitos para ingresar a la comunidad privada. En el próximo paso conectaremos el bot para entregarte un link único de acceso.'
+        );
+      } else {
+        setEstado('pendiente');
+        setMensaje(
+          '⏳ Tu UID está siendo verificado. Te estaremos avisando por mail en las próximas 24 hs cuando actualicemos nuestra base de referidos.'
+        );
+      }
+    } catch (error) {
+      setEstado('error');
+      setMensaje('Ocurrió un error inesperado. Intentá nuevamente en unos minutos.');
+    } finally {
+      setCargando(false);
+    }
   }
 
   return (
@@ -84,12 +134,7 @@ export default function HomePage() {
             <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
               Exchange
             </span>
-            <select
-              required
-              name="exchange"
-              style={inputStyle}
-              defaultValue="bingx"
-            >
+            <select required name="exchange" style={inputStyle} defaultValue="bingx">
               <option value="bingx">BingX</option>
               <option value="bitunix">Bitunix</option>
             </select>
@@ -99,54 +144,39 @@ export default function HomePage() {
             <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
               UID del exchange
             </span>
-            <input
-              required
-              name="uid"
-              placeholder="Ej: 10348085"
-              style={inputStyle}
-            />
+            <input required name="uid" placeholder="Ej: 10348085" style={inputStyle} />
           </label>
 
           <label style={{ display: 'block', marginBottom: '14px' }}>
             <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
               Usuario de Telegram
             </span>
-            <input
-              required
-              name="telegram"
-              placeholder="@usuario"
-              style={inputStyle}
-            />
+            <input required name="telegram" placeholder="@usuario" style={inputStyle} />
           </label>
 
           <label style={{ display: 'block', marginBottom: '20px' }}>
             <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
               Correo electrónico
             </span>
-            <input
-              required
-              type="email"
-              name="email"
-              placeholder="tuemail@gmail.com"
-              style={inputStyle}
-            />
+            <input required type="email" name="email" placeholder="tuemail@gmail.com" style={inputStyle} />
           </label>
 
           <button
             type="submit"
+            disabled={cargando}
             style={{
               width: '100%',
               border: 'none',
               borderRadius: '14px',
               padding: '15px',
-              background: '#4FED96',
+              background: cargando ? '#94a3b8' : '#4FED96',
               color: '#06111f',
               fontWeight: 800,
               fontSize: '16px',
-              cursor: 'pointer',
+              cursor: cargando ? 'not-allowed' : 'pointer',
             }}
           >
-            Verificar y unirme
+            {cargando ? 'Verificando...' : 'Verificar y unirme'}
           </button>
         </form>
 
@@ -154,9 +184,24 @@ export default function HomePage() {
           <div
             style={{
               marginTop: '20px',
-              background: 'rgba(99,217,253,0.10)',
-              border: '1px solid rgba(99,217,253,0.30)',
-              color: '#e0f2fe',
+              background:
+                estado === 'aprobado'
+                  ? 'rgba(79,237,150,0.12)'
+                  : estado === 'pendiente'
+                  ? 'rgba(99,217,253,0.10)'
+                  : 'rgba(239,68,68,0.12)',
+              border:
+                estado === 'aprobado'
+                  ? '1px solid rgba(79,237,150,0.35)'
+                  : estado === 'pendiente'
+                  ? '1px solid rgba(99,217,253,0.30)'
+                  : '1px solid rgba(239,68,68,0.35)',
+              color:
+                estado === 'aprobado'
+                  ? '#d1fae5'
+                  : estado === 'pendiente'
+                  ? '#e0f2fe'
+                  : '#fee2e2',
               borderRadius: '16px',
               padding: '16px',
               lineHeight: '1.5',
@@ -170,7 +215,7 @@ export default function HomePage() {
   );
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: '100%',
   padding: '14px',
   borderRadius: '12px',
