@@ -8,14 +8,30 @@ const MIN_VOLUME = 2000;
 
 export async function POST(request: Request) {
   try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL) {
       return NextResponse.json(
-        { ok: false, message: 'Faltan variables de entorno de Supabase.' },
+        { ok: false, message: 'Falta SUPABASE_URL en Vercel.' },
         { status: 500 }
       );
     }
 
-    const body = await request.json();
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { ok: false, message: 'Falta SUPABASE_SERVICE_ROLE_KEY en Vercel.' },
+        { status: 500 }
+      );
+    }
+
+    let body;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { ok: false, message: 'No se pudieron leer los datos del formulario.' },
+        { status: 400 }
+      );
+    }
 
     const exchange = String(body.exchange || '').trim().toLowerCase();
     const uid = String(body.uid || '').trim();
@@ -29,6 +45,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const cleanSupabaseUrl = SUPABASE_URL.replace(/\/$/, '');
+
     const headers = {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
@@ -36,21 +54,35 @@ export async function POST(request: Request) {
     };
 
     const searchUrl =
-      `${SUPABASE_URL}/rest/v1/exchange_users` +
+      `${cleanSupabaseUrl}/rest/v1/exchange_users` +
       `?select=uid,inviter_uid,volume_30d,kyc_status` +
       `&exchange=eq.${encodeURIComponent(exchange)}` +
       `&uid=eq.${encodeURIComponent(uid)}` +
       `&limit=1`;
 
-    const exchangeResponse = await fetch(searchUrl, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
+    let exchangeResponse;
+
+    try {
+      exchangeResponse = await fetch(searchUrl, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+    } catch {
+      return NextResponse.json(
+        { ok: false, message: 'No se pudo conectar con Supabase. Revisá SUPABASE_URL.' },
+        { status: 500 }
+      );
+    }
 
     if (!exchangeResponse.ok) {
+      const errorText = await exchangeResponse.text();
+
       return NextResponse.json(
-        { ok: false, message: 'Error consultando la base de referidos.' },
+        {
+          ok: false,
+          message: `Supabase rechazó la consulta de exchange_users. Status: ${exchangeResponse.status}. Detalle: ${errorText}`,
+        },
         { status: 500 }
       );
     }
@@ -66,7 +98,7 @@ export async function POST(request: Request) {
     if (exchangeUser) {
       volume30d = Number(exchangeUser.volume_30d || 0);
 
-      if (exchangeUser.inviter_uid !== INVITER_UID) {
+      if (String(exchangeUser.inviter_uid) !== INVITER_UID) {
         result = 'NO_ES_REFERIDO';
       } else if (volume30d < MIN_VOLUME) {
         result = 'NO_CUMPLE_VOLUMEN';
@@ -77,13 +109,10 @@ export async function POST(request: Request) {
       }
     }
 
-    const verificationCode =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random()}`;
+    const verificationCode = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const registrationResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/registrations`,
+      `${cleanSupabaseUrl}/rest/v1/registrations`,
       {
         method: 'POST',
         headers: {
@@ -102,8 +131,13 @@ export async function POST(request: Request) {
     );
 
     if (!registrationResponse.ok) {
+      const errorText = await registrationResponse.text();
+
       return NextResponse.json(
-        { ok: false, message: 'Error guardando el registro.' },
+        {
+          ok: false,
+          message: `Supabase rechazó guardar en registrations. Status: ${registrationResponse.status}. Detalle: ${errorText}`,
+        },
         { status: 500 }
       );
     }
@@ -129,7 +163,12 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, message: 'Error inesperado en la verificación.' },
+      {
+        ok: false,
+        message: `Error inesperado en la verificación: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      },
       { status: 500 }
     );
   }
