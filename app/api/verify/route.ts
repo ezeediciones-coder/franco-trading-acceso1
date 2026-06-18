@@ -8,16 +8,12 @@ const MIN_VOLUME = 2000;
 
 export async function POST(request: Request) {
   try {
-    if (!SUPABASE_URL) {
-      return NextResponse.json(
-        { ok: false, message: 'Falta SUPABASE_URL en Vercel.' },
-        { status: 500 }
-      );
-    }
-
     if (!SUPABASE_SERVICE_ROLE_KEY) {
       return NextResponse.json(
-        { ok: false, message: 'Falta SUPABASE_SERVICE_ROLE_KEY en Vercel.' },
+        {
+          ok: false,
+          message: 'Falta SUPABASE_SERVICE_ROLE_KEY en Vercel.',
+        },
         { status: 500 }
       );
     }
@@ -28,7 +24,10 @@ export async function POST(request: Request) {
       body = await request.json();
     } catch {
       return NextResponse.json(
-        { ok: false, message: 'No se pudieron leer los datos del formulario.' },
+        {
+          ok: false,
+          message: 'No se pudieron leer los datos del formulario.',
+        },
         { status: 400 }
       );
     }
@@ -40,12 +39,13 @@ export async function POST(request: Request) {
 
     if (!exchange || !uid || !telegramUsername || !email) {
       return NextResponse.json(
-        { ok: false, message: 'Faltan datos obligatorios.' },
+        {
+          ok: false,
+          message: 'Faltan datos obligatorios.',
+        },
         { status: 400 }
       );
     }
-
-    const cleanSupabaseUrl = SUPABASE_URL.replace(/\/$/, '');
 
     const headers = {
       apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     };
 
     const searchUrl =
-      `${cleanSupabaseUrl}/rest/v1/exchange_users` +
+      `${SUPABASE_URL}/rest/v1/exchange_users` +
       `?select=uid,inviter_uid,volume_30d,kyc_status` +
       `&exchange=eq.${encodeURIComponent(exchange)}` +
       `&uid=eq.${encodeURIComponent(uid)}` +
@@ -68,9 +68,14 @@ export async function POST(request: Request) {
         headers,
         cache: 'no-store',
       });
-    } catch {
+    } catch (error) {
       return NextResponse.json(
-        { ok: false, message: 'No se pudo conectar con Supabase. Revisá SUPABASE_URL.' },
+        {
+          ok: false,
+          message: `No se pudo conectar con Supabase. URL usada: ${searchUrl}. Error real: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        },
         { status: 500 }
       );
     }
@@ -109,10 +114,12 @@ export async function POST(request: Request) {
       }
     }
 
-    const verificationCode = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const verificationCode = `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
 
     const registrationResponse = await fetch(
-      `${cleanSupabaseUrl}/rest/v1/registrations`,
+      `${SUPABASE_URL}/rest/v1/registrations`,
       {
         method: 'POST',
         headers: {
