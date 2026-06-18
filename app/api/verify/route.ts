@@ -9,12 +9,24 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const INVITER_UID = '8316719';
 const MIN_VOLUME = 2000;
 
+function getSupabaseHeaders() {
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY en Vercel.');
+  }
+
+  return {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
+
 async function createTelegramInviteLink(uid: string) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     throw new Error('Faltan TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID en Vercel.');
   }
 
-  const expireDate = Math.floor(Date.now() / 1000) + 30 * 60; // 30 minutos
+  const expireDate = Math.floor(Date.now() / 1000) + 30 * 60;
 
   const telegramResponse = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/createChatInviteLink`,
@@ -45,6 +57,53 @@ async function createTelegramInviteLink(uid: string) {
     inviteLink: telegramData.result.invite_link,
     expireDate,
   };
+}
+
+async function findExistingValidInvite({
+  exchange,
+  uid,
+  email,
+}: {
+  exchange: string;
+  uid: string;
+  email: string;
+}) {
+  const headers = getSupabaseHeaders();
+  const nowIso = new Date().toISOString();
+
+  const url =
+    `${SUPABASE_URL}/rest/v1/registrations` +
+    `?select=invite_link,invite_expires_at,status` +
+    `&exchange=eq.${encodeURIComponent(exchange)}` +
+    `&uid=eq.${encodeURIComponent(uid)}` +
+    `&email=eq.${encodeURIComponent(email)}` +
+    `&status=eq.approved` +
+    `&invite_link=not.is.null` +
+    `&invite_expires_at=gt.${encodeURIComponent(nowIso)}` +
+    `&order=created_at.desc` +
+    `&limit=1`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Supabase rechazó buscar link vigente. Status: ${response.status}. Detalle: ${errorText}`
+    );
+  }
+
+  const rows = await response.json();
+
+  if (rows && rows.length > 0 && rows[0].invite_link) {
+    return rows[0];
+  }
+
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -88,11 +147,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const headers = {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-    };
+    const headers = getSupabaseHeaders();
 
     const searchUrl =
       `${SUPABASE_URL}/rest/v1/exchange_users` +
@@ -128,6 +183,7 @@ export async function POST(request: Request) {
     let volume30d = 0;
     let inviteLink: string | null = null;
     let inviteExpiresAt: string | null = null;
+    let reusedInvite = false;
 
     if (exchangeUser) {
       volume30d = Number(exchangeUser.volume_30d || 0);
@@ -141,9 +197,23 @@ export async function POST(request: Request) {
         status = 'approved';
         approved = true;
 
-        const telegramInvite = await createTelegramInviteLink(uid);
-        inviteLink = telegramInvite.inviteLink;
-        inviteExpiresAt = new Date(telegramInvite.expireDate * 1000).toISOString();
+        const existingInvite = await findExistingValidInvite({
+          exchange,
+          uid,
+          email,
+        });
+
+        if (existingInvite) {
+          inviteLink = existingInvite.invite_link;
+          inviteExpiresAt = existingInvite.invite_expires_at;
+          reusedInvite = true;
+        } else {
+          const telegramInvite = await createTelegramInviteLink(uid);
+          inviteLink = telegramInvite.inviteLink;
+          inviteExpiresAt = new Date(
+            telegramInvite.expireDate * 1000
+          ).toISOString();
+        }
       }
     }
 
@@ -189,11 +259,13 @@ export async function POST(request: Request) {
         ok: true,
         approved: true,
         result,
+        reused_invite: reusedInvite,
         volume_30d: volume30d,
         invite_link: inviteLink,
         invite_expires_at: inviteExpiresAt,
-        message:
-          'Verificación aprobada. Tu UID cumple con los requisitos. Usá el link único para ingresar al grupo.',
+        message: reusedInvite
+          ? 'Ya tenés un link único vigente. Usá ese link para ingresar al grupo.'
+          : 'Verificación aprobada. Tu UID cumple con los requisitos. Usá el link único para ingresar al grupo.',
       });
     }
 
