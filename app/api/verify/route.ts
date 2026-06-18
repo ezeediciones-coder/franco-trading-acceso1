@@ -3,8 +3,49 @@ import { NextResponse } from 'next/server';
 const SUPABASE_URL = 'https://gxqusszgidztjcbjrbiw.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
 const INVITER_UID = '8316719';
 const MIN_VOLUME = 2000;
+
+async function createTelegramInviteLink(uid: string) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    throw new Error('Faltan TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID en Vercel.');
+  }
+
+  const expireDate = Math.floor(Date.now() / 1000) + 30 * 60; // 30 minutos
+
+  const telegramResponse = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/createChatInviteLink`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        name: `UID ${uid}`,
+        expire_date: expireDate,
+        member_limit: 1,
+        creates_join_request: false,
+      }),
+    }
+  );
+
+  const telegramData = await telegramResponse.json();
+
+  if (!telegramResponse.ok || !telegramData.ok) {
+    throw new Error(
+      telegramData.description || 'Telegram no pudo crear el link de invitación.'
+    );
+  }
+
+  return {
+    inviteLink: telegramData.result.invite_link,
+    expireDate,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -60,25 +101,11 @@ export async function POST(request: Request) {
       `&uid=eq.${encodeURIComponent(uid)}` +
       `&limit=1`;
 
-    let exchangeResponse;
-
-    try {
-      exchangeResponse = await fetch(searchUrl, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: `No se pudo conectar con Supabase. URL usada: ${searchUrl}. Error real: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        },
-        { status: 500 }
-      );
-    }
+    const exchangeResponse = await fetch(searchUrl, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
 
     if (!exchangeResponse.ok) {
       const errorText = await exchangeResponse.text();
@@ -99,6 +126,8 @@ export async function POST(request: Request) {
     let result = 'UID_NO_ENCONTRADO';
     let approved = false;
     let volume30d = 0;
+    let inviteLink: string | null = null;
+    let inviteExpiresAt: string | null = null;
 
     if (exchangeUser) {
       volume30d = Number(exchangeUser.volume_30d || 0);
@@ -111,6 +140,10 @@ export async function POST(request: Request) {
         result = 'APROBADO';
         status = 'approved';
         approved = true;
+
+        const telegramInvite = await createTelegramInviteLink(uid);
+        inviteLink = telegramInvite.inviteLink;
+        inviteExpiresAt = new Date(telegramInvite.expireDate * 1000).toISOString();
       }
     }
 
@@ -133,6 +166,8 @@ export async function POST(request: Request) {
           email,
           status,
           verification_code: verificationCode,
+          invite_link: inviteLink,
+          invite_expires_at: inviteExpiresAt,
         }),
       }
     );
@@ -155,8 +190,10 @@ export async function POST(request: Request) {
         approved: true,
         result,
         volume_30d: volume30d,
+        invite_link: inviteLink,
+        invite_expires_at: inviteExpiresAt,
         message:
-          'Verificación aprobada. Tu UID cumple con los requisitos para ingresar a la comunidad privada.',
+          'Verificación aprobada. Tu UID cumple con los requisitos. Usá el link único para ingresar al grupo.',
       });
     }
 
@@ -165,6 +202,7 @@ export async function POST(request: Request) {
       approved: false,
       result,
       volume_30d: volume30d,
+      invite_link: null,
       message:
         'Tu UID está siendo verificado. Te estaremos avisando por mail en las próximas 24 hs cuando actualicemos nuestra base de referidos.',
     });
