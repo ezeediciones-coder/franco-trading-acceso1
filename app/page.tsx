@@ -7,6 +7,7 @@ export default function HomePage() {
   const [mensaje, setMensaje] = useState('');
   const [estado, setEstado] = useState<'aprobado' | 'pendiente' | 'error' | ''>('');
   const [cargando, setCargando] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
 
   async function verificarUsuario(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -14,6 +15,7 @@ export default function HomePage() {
     setCargando(true);
     setMensaje('');
     setEstado('');
+    setInviteLink('');
 
     const formData = new FormData(e.currentTarget);
 
@@ -47,8 +49,12 @@ export default function HomePage() {
       if (data.approved) {
         setEstado('aprobado');
         setMensaje(
-          '✅ Verificación aprobada. Tu UID cumple con los requisitos para ingresar a la comunidad privada. En el próximo paso conectaremos el bot para entregarte un link único de acceso.'
+          '✅ Verificación aprobada. Tu UID cumple con los requisitos para ingresar a la comunidad privada. Usá el link único de acceso para entrar al grupo.'
         );
+
+        if (data.invite_link) {
+          setInviteLink(data.invite_link);
+        }
       } else {
         setEstado('pendiente');
         setMensaje(
@@ -207,7 +213,41 @@ export default function HomePage() {
               lineHeight: '1.5',
             }}
           >
-            {mensaje}
+            <div>{mensaje}</div>
+
+            {inviteLink && (
+              <a
+                href={inviteLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  marginTop: '16px',
+                  textAlign: 'center',
+                  background: '#4FED96',
+                  color: '#06111f',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  fontWeight: 800,
+                  textDecoration: 'none',
+                }}
+              >
+                Entrar al Telegram
+              </a>
+            )}
+
+            {inviteLink && (
+              <p
+                style={{
+                  marginTop: '12px',
+                  marginBottom: 0,
+                  fontSize: '13px',
+                  color: '#bbf7d0',
+                }}
+              >
+                Este link es único, vence en 30 minutos y solo puede usarse una vez.
+              </p>
+            )}
           </div>
         )}
       </section>
