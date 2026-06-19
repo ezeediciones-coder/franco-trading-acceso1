@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 const SUPABASE_URL = 'https://gxqusszgidztjcbjrbiw.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 function getSupabaseHeaders() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
@@ -18,6 +19,79 @@ function getSupabaseHeaders() {
 function cleanUsername(username?: string | null) {
   if (!username) return null;
   return username.startsWith('@') ? username : `@${username}`;
+}
+
+async function sendTelegramMessage(chatId: number, text: string) {
+  if (!TELEGRAM_BOT_TOKEN) {
+    throw new Error('Falta TELEGRAM_BOT_TOKEN en Vercel.');
+  }
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok || !data.ok) {
+    throw new Error(
+      data.description || 'Telegram no pudo enviar el mensaje privado.'
+    );
+  }
+
+  return data;
+}
+
+async function saveTelegramIdentity({
+  telegramId,
+  telegramUsername,
+  firstName,
+  lastName,
+}: {
+  telegramId: number;
+  telegramUsername: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}) {
+  const headers = getSupabaseHeaders();
+
+  const response = await fetch(
+    `${SUPABASE_URL}/rest/v1/telegram_identities?on_conflict=telegram_id`,
+    {
+      method: 'POST',
+      headers: {
+        ...headers,
+        Prefer: 'resolution=merge-duplicates,return=representation',
+      },
+      body: JSON.stringify({
+        telegram_id: telegramId,
+        telegram_username: telegramUsername,
+        first_name: firstName,
+        last_name: lastName,
+        last_private_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Error guardando telegram_identity. Status: ${response.status}. Detalle: ${errorText}`
+    );
+  }
+
+  return response.json();
 }
 
 async function findRegistrationByInviteLink(inviteLink: string) {
@@ -179,9 +253,45 @@ export async function POST(request: Request) {
 
     console.log('TELEGRAM_UPDATE:', JSON.stringify(update, null, 2));
 
+    // Caso 1: usuario le escribe al bot por privado.
+    if (update.message?.chat?.type === 'private') {
+      const from = update.message.from;
+
+      if (!from || from.is_bot) {
+        return NextResponse.json({
+          ok: true,
+          ignored: 'private_message_without_valid_user',
+        });
+      }
+
+      const telegramId = from.id;
+      const telegramUsername = cleanUsername(from.username);
+      const firstName = from.first_name || null;
+      const lastName = from.last_name || null;
+
+      await saveTelegramIdentity({
+        telegramId,
+        telegramUsername,
+        firstName,
+        lastName,
+      });
+
+      await sendTelegramMessage(
+        telegramId,
+        `✅ <b>Telegram confirmado</b>\n\nTu cuenta fue identificada correctamente.\n\nAhora completá la verificación en la página de Franco Trading con tu UID, usuario de Telegram y email.`
+      );
+
+      return NextResponse.json({
+        ok: true,
+        type: 'private_identity_saved',
+        telegram_id: telegramId,
+        telegram_username: telegramUsername,
+      });
+    }
+
     const results = [];
 
-    // Caso 1: Telegram manda un mensaje de nuevo miembro
+    // Caso 2: Telegram manda mensaje de nuevo miembro.
     if (update.message?.new_chat_members?.length) {
       const inviteLink = update.message.invite_link?.invite_link || null;
 
@@ -207,7 +317,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // Caso 2: Telegram manda actualización de miembro del chat
+    // Caso 3: Telegram manda actualización de miembro del chat.
     if (update.chat_member) {
       const oldStatus = update.chat_member.old_chat_member?.status;
       const newStatus = update.chat_member.new_chat_member?.status;
