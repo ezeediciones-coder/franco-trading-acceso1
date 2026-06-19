@@ -76,12 +76,15 @@ export default function AdminPage() {
           <h1 style={titleStyle}>Panel Admin</h1>
 
           <p style={descriptionStyle}>
-            Cargá el CSV actualizado de cada exchange para actualizar la base de referidos y volumen.
+            Desde acá se actualiza la base de referidos de BingX, Bitunix y Bitget.
+            Cada archivo reemplaza la base anterior del exchange seleccionado.
           </p>
         </div>
 
         <div style={warningStyle}>
-          Al subir un CSV, el sistema borra primero los datos anteriores de ese exchange y carga la base nueva.
+          <strong>Importante:</strong> antes de subir un CSV, asegurate de elegir correctamente
+          el exchange. Si elegís Bitget, se borra la base anterior de Bitget y se carga la nueva.
+          No afecta BingX ni Bitunix.
         </div>
 
         <form onSubmit={subirCsv}>
@@ -99,7 +102,7 @@ export default function AdminPage() {
           </label>
 
           <label style={labelStyle}>
-            <span style={labelTextStyle}>Exchange</span>
+            <span style={labelTextStyle}>Exchange que querés actualizar</span>
 
             <select
               required
@@ -159,15 +162,76 @@ export default function AdminPage() {
         )}
 
         <div style={helpBoxStyle}>
-          <h2 style={helpTitleStyle}>Formato recomendado del CSV</h2>
+          <h2 style={helpTitleStyle}>¿Qué datos necesita el CSV?</h2>
+
+          <p style={helpTextStyle}>
+            El archivo puede venir con muchas columnas del exchange, pero el sistema solo usa
+            estas columnas importantes:
+          </p>
+
+          <div style={infoGridStyle}>
+            <div style={infoItemStyle}>
+              <strong>uid</strong>
+              <span>UID del usuario referido.</span>
+            </div>
+
+            <div style={infoItemStyle}>
+              <strong>inviter_uid</strong>
+              <span>UID referidor de Franco en ese exchange.</span>
+            </div>
+
+            <div style={infoItemStyle}>
+              <strong>volume_30d</strong>
+              <span>Volumen de trading de los últimos 30 días.</span>
+            </div>
+
+            <div style={infoItemStyle}>
+              <strong>kyc_status</strong>
+              <span>Estado KYC. Puede ser YES, NO o UNKNOWN.</span>
+            </div>
+          </div>
+
+          <div style={miniWarningStyle}>
+            Si el CSV trae columnas extra como nombre, fecha, país, email, comisión, balance,
+            teléfono u otros datos, el sistema las ignora. Lo importante es que existan UID,
+            referidor y volumen.
+          </div>
+
+          <h3 style={subTitleStyle}>Formato recomendado</h3>
 
           <pre style={codeStyle}>{`uid,inviter_uid,volume_30d,kyc_status
 10348085,8316719,723967.53,YES
 33814876,8316719,482.51,YES`}</pre>
 
           <p style={helpTextStyle}>
-            El exchange no hace falta ponerlo en el CSV, porque se elige arriba en el panel.
+            El exchange no hace falta ponerlo dentro del CSV porque se selecciona arriba en el
+            panel. Si elegís BingX, todos los UID del archivo se guardan como BingX. Si elegís
+            Bitget, se guardan como Bitget.
           </p>
+        </div>
+
+        <div style={stepsBoxStyle}>
+          <h2 style={helpTitleStyle}>Pasos recomendados para Fran</h2>
+
+          <ol style={stepsListStyle}>
+            <li>Descargar el CSV actualizado desde el exchange.</li>
+            <li>Revisar que tenga UID del usuario, UID referidor y volumen de 30 días.</li>
+            <li>Entrar a este panel admin.</li>
+            <li>Elegir el exchange correcto: BingX, Bitunix o Bitget.</li>
+            <li>Subir el CSV y tocar “Actualizar base”.</li>
+            <li>Verificar que aparezca el mensaje de carga correcta.</li>
+          </ol>
+        </div>
+
+        <div style={dangerBoxStyle}>
+          <h2 style={dangerTitleStyle}>Qué no hacer</h2>
+
+          <ul style={dangerListStyle}>
+            <li>No subir un CSV de Bitget seleccionando BingX.</li>
+            <li>No subir archivos Excel .xlsx. Tiene que ser CSV.</li>
+            <li>No borrar columnas de UID, referidor o volumen.</li>
+            <li>No cargar datos directo en Supabase si no es necesario.</li>
+          </ul>
         </div>
       </section>
     </main>
@@ -187,7 +251,7 @@ const pageStyle: CSSProperties = {
 
 const cardStyle: CSSProperties = {
   width: '100%',
-  maxWidth: '620px',
+  maxWidth: '680px',
   background: 'rgba(255,255,255,0.06)',
   border: '1px solid rgba(255,255,255,0.12)',
   borderRadius: '24px',
@@ -296,9 +360,53 @@ const helpBoxStyle: CSSProperties = {
 };
 
 const helpTitleStyle: CSSProperties = {
-  fontSize: '18px',
+  fontSize: '20px',
   margin: 0,
   marginBottom: '12px',
+};
+
+const subTitleStyle: CSSProperties = {
+  fontSize: '16px',
+  margin: 0,
+  marginTop: '18px',
+  marginBottom: '10px',
+  color: '#e5e7eb',
+};
+
+const helpTextStyle: CSSProperties = {
+  color: '#cbd5e1',
+  margin: 0,
+  marginTop: '12px',
+  lineHeight: '1.5',
+};
+
+const infoGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: '12px',
+  marginTop: '16px',
+};
+
+const infoItemStyle: CSSProperties = {
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(255,255,255,0.10)',
+  borderRadius: '12px',
+  padding: '12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  color: '#cbd5e1',
+  lineHeight: '1.4',
+};
+
+const miniWarningStyle: CSSProperties = {
+  marginTop: '16px',
+  background: 'rgba(79,237,150,0.08)',
+  border: '1px solid rgba(79,237,150,0.25)',
+  borderRadius: '12px',
+  padding: '14px',
+  color: '#d1fae5',
+  lineHeight: '1.5',
 };
 
 const codeStyle: CSSProperties = {
@@ -311,9 +419,39 @@ const codeStyle: CSSProperties = {
   lineHeight: '1.5',
 };
 
-const helpTextStyle: CSSProperties = {
-  color: '#cbd5e1',
+const stepsBoxStyle: CSSProperties = {
+  marginTop: '18px',
+  background: 'rgba(99,217,253,0.08)',
+  border: '1px solid rgba(99,217,253,0.20)',
+  borderRadius: '16px',
+  padding: '18px',
+};
+
+const stepsListStyle: CSSProperties = {
+  color: '#e0f2fe',
+  paddingLeft: '20px',
   margin: 0,
-  marginTop: '12px',
-  lineHeight: '1.5',
+  lineHeight: '1.7',
+};
+
+const dangerBoxStyle: CSSProperties = {
+  marginTop: '18px',
+  background: 'rgba(239,68,68,0.10)',
+  border: '1px solid rgba(239,68,68,0.28)',
+  borderRadius: '16px',
+  padding: '18px',
+};
+
+const dangerTitleStyle: CSSProperties = {
+  fontSize: '20px',
+  margin: 0,
+  marginBottom: '12px',
+  color: '#fecaca',
+};
+
+const dangerListStyle: CSSProperties = {
+  color: '#fee2e2',
+  paddingLeft: '20px',
+  margin: 0,
+  lineHeight: '1.7',
 };
