@@ -61,7 +61,7 @@ export default function HomePage() {
           '⏳ Tu UID está siendo verificado. Te estaremos avisando por mail en las próximas 24 hs cuando actualicemos nuestra base de referidos.'
         );
       }
-    } catch (error) {
+    } catch {
       setEstado('error');
       setMensaje('Ocurrió un error inesperado. Intentá nuevamente en unos minutos.');
     } finally {
@@ -70,116 +70,80 @@ export default function HomePage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0f172a, #111827)',
-        color: 'white',
-        fontFamily: 'Arial, sans-serif',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-      }}
-    >
-      <section
-        style={{
-          width: '100%',
-          maxWidth: '520px',
-          background: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: '24px',
-          padding: '32px',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
-        }}
-      >
+    <main style={pageStyle}>
+      <section style={cardStyle}>
         <div style={{ marginBottom: '24px' }}>
-          <p
-            style={{
-              color: '#4FED96',
-              fontWeight: 700,
-              marginBottom: '8px',
-              letterSpacing: '0.08em',
-              fontSize: '13px',
-            }}
-          >
-            FRANCO TRADING
-          </p>
+          <p style={brandStyle}>FRANCO TRADING</p>
 
-          <h1
-            style={{
-              fontSize: '34px',
-              lineHeight: '1.1',
-              margin: 0,
-              marginBottom: '12px',
-            }}
-          >
-            Acceso a la comunidad privada
-          </h1>
+          <h1 style={titleStyle}>Acceso a la comunidad privada</h1>
 
-          <p style={{ color: '#cbd5e1', lineHeight: '1.5', margin: 0 }}>
-            Para ingresar al grupo privado tenés que estar registrado como referido y cumplir con el volumen mínimo requerido.
+          <p style={descriptionStyle}>
+            Para ingresar al grupo privado tenés que estar registrado como referido y cumplir
+            con el volumen mínimo requerido.
           </p>
         </div>
 
-        <div
-          style={{
-            background: 'rgba(79,237,150,0.08)',
-            border: '1px solid rgba(79,237,150,0.25)',
-            borderRadius: '16px',
-            padding: '16px',
-            marginBottom: '24px',
-            color: '#d1fae5',
-          }}
-        >
-          Requisito actual: <strong>2.000 USDT de volumen en los últimos 30 días.</strong>
+        <div style={requirementStyle}>
+          Requisito actual:{' '}
+          <strong>2.000 USDT de volumen en los últimos 30 días.</strong>
         </div>
 
         <form onSubmit={verificarUsuario}>
-          <label style={{ display: 'block', marginBottom: '14px' }}>
-            <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
-              Exchange
-            </span>
-           <select required name="exchange" defaultValue="bingx">
-  <option value="bingx">BingX</option>
-  <option value="bitunix">Bitunix</option>
-  <option value="bitget">Bitget</option>
-</select>
+          <label style={labelStyle}>
+            <span style={labelTextStyle}>Exchange</span>
+
+            <select
+              required
+              name="exchange"
+              defaultValue="bingx"
+              style={selectStyle}
+            >
+              <option value="bingx">BingX</option>
+              <option value="bitunix">Bitunix</option>
+              <option value="bitget">Bitget</option>
+            </select>
           </label>
 
-          <label style={{ display: 'block', marginBottom: '14px' }}>
-            <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
-              UID del exchange
-            </span>
-            <input required name="uid" placeholder="Ej: 10348085" style={inputStyle} />
+          <label style={labelStyle}>
+            <span style={labelTextStyle}>UID del exchange</span>
+
+            <input
+              required
+              name="uid"
+              placeholder="Ej: 10348085"
+              style={inputStyle}
+            />
           </label>
 
-          <label style={{ display: 'block', marginBottom: '14px' }}>
-            <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
-              Usuario de Telegram
-            </span>
-            <input required name="telegram" placeholder="@usuario" style={inputStyle} />
+          <label style={labelStyle}>
+            <span style={labelTextStyle}>Usuario de Telegram</span>
+
+            <input
+              required
+              name="telegram"
+              placeholder="@usuario"
+              style={inputStyle}
+            />
           </label>
 
-          <label style={{ display: 'block', marginBottom: '20px' }}>
-            <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
-              Correo electrónico
-            </span>
-            <input required type="email" name="email" placeholder="tuemail@gmail.com" style={inputStyle} />
+          <label style={{ ...labelStyle, marginBottom: '20px' }}>
+            <span style={labelTextStyle}>Correo electrónico</span>
+
+            <input
+              required
+              type="email"
+              name="email"
+              placeholder="tuemail@gmail.com"
+              style={inputStyle}
+            />
           </label>
 
           <button
             type="submit"
             disabled={cargando}
             style={{
-              width: '100%',
-              border: 'none',
-              borderRadius: '14px',
-              padding: '15px',
+              ...buttonStyle,
               background: cargando ? '#94a3b8' : '#4FED96',
-              color: '#06111f',
-              fontWeight: 800,
-              fontSize: '16px',
               cursor: cargando ? 'not-allowed' : 'pointer',
             }}
           >
@@ -190,7 +154,7 @@ export default function HomePage() {
         {mensaje && (
           <div
             style={{
-              marginTop: '20px',
+              ...messageBoxStyle,
               background:
                 estado === 'aprobado'
                   ? 'rgba(79,237,150,0.12)'
@@ -209,9 +173,6 @@ export default function HomePage() {
                   : estado === 'pendiente'
                   ? '#e0f2fe'
                   : '#fee2e2',
-              borderRadius: '16px',
-              padding: '16px',
-              lineHeight: '1.5',
             }}
           >
             <div>{mensaje}</div>
@@ -221,31 +182,14 @@ export default function HomePage() {
                 href={inviteLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  display: 'block',
-                  marginTop: '16px',
-                  textAlign: 'center',
-                  background: '#4FED96',
-                  color: '#06111f',
-                  padding: '14px',
-                  borderRadius: '12px',
-                  fontWeight: 800,
-                  textDecoration: 'none',
-                }}
+                style={telegramButtonStyle}
               >
                 Entrar al Telegram
               </a>
             )}
 
             {inviteLink && (
-              <p
-                style={{
-                  marginTop: '12px',
-                  marginBottom: 0,
-                  fontSize: '13px',
-                  color: '#bbf7d0',
-                }}
-              >
+              <p style={linkNoteStyle}>
                 Este link es único, vence en 30 minutos y solo puede usarse una vez.
               </p>
             )}
@@ -256,6 +200,68 @@ export default function HomePage() {
   );
 }
 
+const pageStyle: CSSProperties = {
+  minHeight: '100vh',
+  background: 'linear-gradient(135deg, #0f172a, #111827)',
+  color: 'white',
+  fontFamily: 'Arial, sans-serif',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '24px',
+};
+
+const cardStyle: CSSProperties = {
+  width: '100%',
+  maxWidth: '520px',
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: '24px',
+  padding: '32px',
+  boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
+};
+
+const brandStyle: CSSProperties = {
+  color: '#4FED96',
+  fontWeight: 700,
+  marginBottom: '8px',
+  letterSpacing: '0.08em',
+  fontSize: '13px',
+};
+
+const titleStyle: CSSProperties = {
+  fontSize: '34px',
+  lineHeight: '1.1',
+  margin: 0,
+  marginBottom: '12px',
+};
+
+const descriptionStyle: CSSProperties = {
+  color: '#cbd5e1',
+  lineHeight: '1.5',
+  margin: 0,
+};
+
+const requirementStyle: CSSProperties = {
+  background: 'rgba(79,237,150,0.08)',
+  border: '1px solid rgba(79,237,150,0.25)',
+  borderRadius: '16px',
+  padding: '16px',
+  marginBottom: '24px',
+  color: '#d1fae5',
+};
+
+const labelStyle: CSSProperties = {
+  display: 'block',
+  marginBottom: '14px',
+};
+
+const labelTextStyle: CSSProperties = {
+  display: 'block',
+  marginBottom: '6px',
+  color: '#e5e7eb',
+};
+
 const inputStyle: CSSProperties = {
   width: '100%',
   padding: '14px',
@@ -265,4 +271,52 @@ const inputStyle: CSSProperties = {
   color: 'white',
   fontSize: '15px',
   outline: 'none',
+};
+
+const selectStyle: CSSProperties = {
+  width: '100%',
+  padding: '14px',
+  borderRadius: '12px',
+  border: '1px solid rgba(255,255,255,0.18)',
+  background: 'rgba(15,23,42,0.9)',
+  color: 'white',
+  fontSize: '15px',
+  outline: 'none',
+  cursor: 'pointer',
+};
+
+const buttonStyle: CSSProperties = {
+  width: '100%',
+  border: 'none',
+  borderRadius: '14px',
+  padding: '15px',
+  color: '#06111f',
+  fontWeight: 800,
+  fontSize: '16px',
+};
+
+const messageBoxStyle: CSSProperties = {
+  marginTop: '20px',
+  borderRadius: '16px',
+  padding: '16px',
+  lineHeight: '1.5',
+};
+
+const telegramButtonStyle: CSSProperties = {
+  display: 'block',
+  marginTop: '16px',
+  textAlign: 'center',
+  background: '#4FED96',
+  color: '#06111f',
+  padding: '14px',
+  borderRadius: '12px',
+  fontWeight: 800,
+  textDecoration: 'none',
+};
+
+const linkNoteStyle: CSSProperties = {
+  marginTop: '12px',
+  marginBottom: 0,
+  fontSize: '13px',
+  color: '#bbf7d0',
 };
