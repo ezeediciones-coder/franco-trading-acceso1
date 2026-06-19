@@ -140,10 +140,11 @@ export default function HomePage() {
             <span style={{ display: 'block', marginBottom: '6px', color: '#e5e7eb' }}>
               Exchange
             </span>
-            <select required name="exchange" style={inputStyle} defaultValue="bingx">
-              <option value="bingx">BingX</option>
-              <option value="bitunix">Bitunix</option>
-            </select>
+           <select required name="exchange" defaultValue="bingx">
+  <option value="bingx">BingX</option>
+  <option value="bitunix">Bitunix</option>
+  <option value="bitget">Bitget</option>
+</select>
           </label>
 
           <label style={{ display: 'block', marginBottom: '14px' }}>
