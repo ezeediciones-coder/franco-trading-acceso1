@@ -4,6 +4,8 @@ const SUPABASE_URL = 'https://gxqusszgidztjcbjrbiw.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+const REGISTRATION_URL = 'https://project-oc04r.vercel.app';
+
 function getSupabaseHeaders() {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY en Vercel.');
@@ -37,6 +39,16 @@ async function sendTelegramMessage(chatId: number, text: string) {
         chat_id: chatId,
         text,
         parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'Completar verificación',
+                url: REGISTRATION_URL,
+              },
+            ],
+          ],
+        },
       }),
     }
   );
@@ -278,7 +290,19 @@ export async function POST(request: Request) {
 
       await sendTelegramMessage(
         telegramId,
-        `✅ <b>Telegram confirmado</b>\n\nTu cuenta fue identificada correctamente.\n\nAhora completá la verificación en la página de Franco Trading con tu UID, usuario de Telegram y email.`
+        `✅ <b>Telegram confirmado</b>
+
+Tu cuenta fue identificada correctamente.
+
+Ahora completá la verificación para acceder o mantener tu acceso a la comunidad privada de Franco Trading.
+
+👉 <b>Ingresá acá:</b>
+${REGISTRATION_URL}
+
+Vas a necesitar:
+• UID del exchange
+• Usuario de Telegram
+• Email`
       );
 
       return NextResponse.json({
