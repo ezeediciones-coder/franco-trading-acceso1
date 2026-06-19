@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/send-reminders",
       "schedule": "0 12 25 * *"
+    },
+    {
+      "path": "/api/cron/monthly-check",
+      "schedule": "0 12 30 * *"
     }
   ]
 }
