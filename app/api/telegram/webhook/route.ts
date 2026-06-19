@@ -29,6 +29,8 @@ async function findRegistrationByInviteLink(inviteLink: string) {
     `&invite_link=eq.${encodeURIComponent(inviteLink)}` +
     `&limit=1`;
 
+  console.log('BUSCANDO_REGISTRATION_URL:', url);
+
   const response = await fetch(url, {
     method: 'GET',
     headers,
@@ -43,6 +45,8 @@ async function findRegistrationByInviteLink(inviteLink: string) {
   }
 
   const rows = await response.json();
+
+  console.log('REGISTRATION_ENCONTRADA:', JSON.stringify(rows, null, 2));
 
   if (!rows || rows.length === 0) {
     return null;
@@ -68,6 +72,20 @@ async function saveCommunityMember({
 }) {
   const headers = getSupabaseHeaders();
 
+  const payload = {
+    registration_id: registrationId,
+    telegram_id: telegramId,
+    telegram_username: telegramUsername,
+    uid,
+    email,
+    exchange,
+    status: 'active',
+    joined_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  console.log('GUARDANDO_COMMUNITY_MEMBER:', JSON.stringify(payload, null, 2));
+
   const response = await fetch(
     `${SUPABASE_URL}/rest/v1/community_members?on_conflict=telegram_id`,
     {
@@ -76,17 +94,7 @@ async function saveCommunityMember({
         ...headers,
         Prefer: 'resolution=merge-duplicates,return=representation',
       },
-      body: JSON.stringify({
-        registration_id: registrationId,
-        telegram_id: telegramId,
-        telegram_username: telegramUsername,
-        uid,
-        email,
-        exchange,
-        status: 'active',
-        joined_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }),
+      body: JSON.stringify(payload),
     }
   );
 
@@ -97,47 +105,70 @@ async function saveCommunityMember({
     );
   }
 
-  return response.json();
+  const result = await response.json();
+
+  console.log('COMMUNITY_MEMBER_GUARDADO:', JSON.stringify(result, null, 2));
+
+  return result;
 }
 
 export async function POST(request: Request) {
   try {
     const update = await request.json();
 
+    console.log('TELEGRAM_UPDATE:', JSON.stringify(update, null, 2));
+
     const message = update.message;
 
     if (!message) {
+      console.log('IGNORADO: no_message');
       return NextResponse.json({ ok: true, ignored: 'no_message' });
     }
 
     const newMembers = message.new_chat_members;
 
     if (!newMembers || !Array.isArray(newMembers) || newMembers.length === 0) {
+      console.log('IGNORADO: no_new_members');
       return NextResponse.json({ ok: true, ignored: 'no_new_members' });
     }
+
+    console.log('NEW_MEMBERS:', JSON.stringify(newMembers, null, 2));
 
     const inviteLink = message.invite_link?.invite_link;
 
     if (!inviteLink) {
+      console.log('IGNORADO: no_invite_link_in_message');
+      console.log('MESSAGE_COMPLETO:', JSON.stringify(message, null, 2));
+
       return NextResponse.json({
         ok: true,
         ignored: 'no_invite_link_in_message',
       });
     }
 
+    console.log('INVITE_LINK_USADO:', inviteLink);
+
     const registration = await findRegistrationByInviteLink(inviteLink);
 
     if (!registration) {
+      console.log('IGNORADO: registration_not_found_for_invite_link');
+
       return NextResponse.json({
         ok: true,
         ignored: 'registration_not_found_for_invite_link',
+        invite_link: inviteLink,
       });
     }
+
+    console.log('REGISTRATION_USADA:', JSON.stringify(registration, null, 2));
 
     const savedMembers = [];
 
     for (const member of newMembers) {
-      if (member.is_bot) continue;
+      if (member.is_bot) {
+        console.log('IGNORADO: miembro_es_bot');
+        continue;
+      }
 
       const telegramId = member.id;
       const telegramUsername = cleanUsername(member.username);
@@ -154,11 +185,15 @@ export async function POST(request: Request) {
       savedMembers.push(saved);
     }
 
+    console.log('TOTAL_MIEMBROS_GUARDADOS:', savedMembers.length);
+
     return NextResponse.json({
       ok: true,
       saved_members: savedMembers.length,
     });
   } catch (error) {
+    console.error('ERROR_WEBHOOK_TELEGRAM:', error);
+
     return NextResponse.json(
       {
         ok: false,
