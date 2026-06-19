@@ -15,7 +15,7 @@ function getSupabaseHeaders() {
   };
 }
 
-function cleanUsername(username?: string) {
+function cleanUsername(username?: string | null) {
   if (!username) return null;
   return username.startsWith('@') ? username : `@${username}`;
 }
@@ -25,11 +25,9 @@ async function findRegistrationByInviteLink(inviteLink: string) {
 
   const url =
     `${SUPABASE_URL}/rest/v1/registrations` +
-    `?select=id,exchange,uid,email,telegram_username,invite_link,status` +
+    `?select=id,exchange,uid,email,telegram_username,invite_link,status,created_at` +
     `&invite_link=eq.${encodeURIComponent(inviteLink)}` +
     `&limit=1`;
-
-  console.log('BUSCANDO_REGISTRATION_URL:', url);
 
   const response = await fetch(url, {
     method: 'GET',
@@ -45,14 +43,37 @@ async function findRegistrationByInviteLink(inviteLink: string) {
   }
 
   const rows = await response.json();
+  return rows?.[0] || null;
+}
 
-  console.log('REGISTRATION_ENCONTRADA:', JSON.stringify(rows, null, 2));
+async function findRegistrationByTelegramUsername(telegramUsername: string | null) {
+  if (!telegramUsername) return null;
 
-  if (!rows || rows.length === 0) {
-    return null;
+  const headers = getSupabaseHeaders();
+
+  const url =
+    `${SUPABASE_URL}/rest/v1/registrations` +
+    `?select=id,exchange,uid,email,telegram_username,invite_link,status,created_at` +
+    `&telegram_username=eq.${encodeURIComponent(telegramUsername)}` +
+    `&status=eq.approved` +
+    `&order=created_at.desc` +
+    `&limit=1`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Error buscando registration por telegram_username. Status: ${response.status}. Detalle: ${errorText}`
+    );
   }
 
-  return rows[0];
+  const rows = await response.json();
+  return rows?.[0] || null;
 }
 
 async function saveCommunityMember({
@@ -72,20 +93,6 @@ async function saveCommunityMember({
 }) {
   const headers = getSupabaseHeaders();
 
-  const payload = {
-    registration_id: registrationId,
-    telegram_id: telegramId,
-    telegram_username: telegramUsername,
-    uid,
-    email,
-    exchange,
-    status: 'active',
-    joined_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  console.log('GUARDANDO_COMMUNITY_MEMBER:', JSON.stringify(payload, null, 2));
-
   const response = await fetch(
     `${SUPABASE_URL}/rest/v1/community_members?on_conflict=telegram_id`,
     {
@@ -94,7 +101,17 @@ async function saveCommunityMember({
         ...headers,
         Prefer: 'resolution=merge-duplicates,return=representation',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        registration_id: registrationId,
+        telegram_id: telegramId,
+        telegram_username: telegramUsername,
+        uid,
+        email,
+        exchange,
+        status: 'active',
+        joined_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
     }
   );
 
@@ -105,11 +122,55 @@ async function saveCommunityMember({
     );
   }
 
-  const result = await response.json();
+  return response.json();
+}
 
-  console.log('COMMUNITY_MEMBER_GUARDADO:', JSON.stringify(result, null, 2));
+async function processJoinedUser({
+  telegramId,
+  telegramUsername,
+  inviteLink,
+}: {
+  telegramId: number;
+  telegramUsername: string | null;
+  inviteLink: string | null;
+}) {
+  let registration = null;
 
-  return result;
+  if (inviteLink) {
+    registration = await findRegistrationByInviteLink(inviteLink);
+  }
+
+  if (!registration) {
+    registration = await findRegistrationByTelegramUsername(telegramUsername);
+  }
+
+  if (!registration) {
+    return {
+      saved: false,
+      reason: 'registration_not_found',
+      telegram_id: telegramId,
+      telegram_username: telegramUsername,
+      invite_link: inviteLink,
+    };
+  }
+
+  await saveCommunityMember({
+    registrationId: registration.id,
+    telegramId,
+    telegramUsername,
+    uid: registration.uid,
+    email: registration.email,
+    exchange: registration.exchange,
+  });
+
+  return {
+    saved: true,
+    telegram_id: telegramId,
+    telegram_username: telegramUsername,
+    uid: registration.uid,
+    email: registration.email,
+    exchange: registration.exchange,
+  };
 }
 
 export async function POST(request: Request) {
@@ -118,78 +179,73 @@ export async function POST(request: Request) {
 
     console.log('TELEGRAM_UPDATE:', JSON.stringify(update, null, 2));
 
-    const message = update.message;
+    const results = [];
 
-    if (!message) {
-      console.log('IGNORADO: no_message');
-      return NextResponse.json({ ok: true, ignored: 'no_message' });
-    }
+    // Caso 1: Telegram manda un mensaje de nuevo miembro
+    if (update.message?.new_chat_members?.length) {
+      const inviteLink = update.message.invite_link?.invite_link || null;
 
-    const newMembers = message.new_chat_members;
+      for (const member of update.message.new_chat_members) {
+        if (member.is_bot) continue;
 
-    if (!newMembers || !Array.isArray(newMembers) || newMembers.length === 0) {
-      console.log('IGNORADO: no_new_members');
-      return NextResponse.json({ ok: true, ignored: 'no_new_members' });
-    }
+        const telegramId = member.id;
+        const telegramUsername = cleanUsername(member.username);
 
-    console.log('NEW_MEMBERS:', JSON.stringify(newMembers, null, 2));
+        const result = await processJoinedUser({
+          telegramId,
+          telegramUsername,
+          inviteLink,
+        });
 
-    const inviteLink = message.invite_link?.invite_link;
-
-    if (!inviteLink) {
-      console.log('IGNORADO: no_invite_link_in_message');
-      console.log('MESSAGE_COMPLETO:', JSON.stringify(message, null, 2));
-
-      return NextResponse.json({
-        ok: true,
-        ignored: 'no_invite_link_in_message',
-      });
-    }
-
-    console.log('INVITE_LINK_USADO:', inviteLink);
-
-    const registration = await findRegistrationByInviteLink(inviteLink);
-
-    if (!registration) {
-      console.log('IGNORADO: registration_not_found_for_invite_link');
-
-      return NextResponse.json({
-        ok: true,
-        ignored: 'registration_not_found_for_invite_link',
-        invite_link: inviteLink,
-      });
-    }
-
-    console.log('REGISTRATION_USADA:', JSON.stringify(registration, null, 2));
-
-    const savedMembers = [];
-
-    for (const member of newMembers) {
-      if (member.is_bot) {
-        console.log('IGNORADO: miembro_es_bot');
-        continue;
+        results.push(result);
       }
 
-      const telegramId = member.id;
-      const telegramUsername = cleanUsername(member.username);
-
-      const saved = await saveCommunityMember({
-        registrationId: registration.id,
-        telegramId,
-        telegramUsername,
-        uid: registration.uid,
-        email: registration.email,
-        exchange: registration.exchange,
+      return NextResponse.json({
+        ok: true,
+        type: 'message_new_chat_members',
+        results,
       });
-
-      savedMembers.push(saved);
     }
 
-    console.log('TOTAL_MIEMBROS_GUARDADOS:', savedMembers.length);
+    // Caso 2: Telegram manda actualización de miembro del chat
+    if (update.chat_member) {
+      const oldStatus = update.chat_member.old_chat_member?.status;
+      const newStatus = update.chat_member.new_chat_member?.status;
+      const user = update.chat_member.new_chat_member?.user;
+      const inviteLink = update.chat_member.invite_link?.invite_link || null;
+
+      const joined =
+        ['left', 'kicked'].includes(oldStatus) &&
+        ['member', 'restricted', 'administrator'].includes(newStatus);
+
+      if (!joined || !user || user.is_bot) {
+        return NextResponse.json({
+          ok: true,
+          ignored: 'chat_member_not_join_event',
+          oldStatus,
+          newStatus,
+        });
+      }
+
+      const telegramId = user.id;
+      const telegramUsername = cleanUsername(user.username);
+
+      const result = await processJoinedUser({
+        telegramId,
+        telegramUsername,
+        inviteLink,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        type: 'chat_member_join',
+        result,
+      });
+    }
 
     return NextResponse.json({
       ok: true,
-      saved_members: savedMembers.length,
+      ignored: 'unsupported_update_type',
     });
   } catch (error) {
     console.error('ERROR_WEBHOOK_TELEGRAM:', error);
