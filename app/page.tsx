@@ -56,11 +56,12 @@ export default function HomePage() {
           setInviteLink(data.invite_link);
         }
       } else {
-        setEstado('pendiente');
-        setMensaje(
-          '⏳ Tu UID está siendo verificado. Te estaremos avisando por mail en las próximas 24 hs cuando actualicemos nuestra base de referidos.'
-        );
-      }
+  setEstado('pendiente');
+  setMensaje(
+    data.message ||
+      '⏳ Tu UID está siendo verificado. Te estaremos avisando por mail cuando actualicemos nuestra base de referidos.'
+  );
+}
     } catch {
       setEstado('error');
       setMensaje('Ocurrió un error inesperado. Intentá nuevamente en unos minutos.');
