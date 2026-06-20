@@ -4,28 +4,32 @@ import crypto from 'crypto';
 export const runtime = 'nodejs';
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
-const BINGX_API_KEY = process.env.BINGX_API_KEY;
-const BINGX_SECRET_KEY = process.env.BINGX_SECRET_KEY;
+const BINGX_API_KEY = process.env.BINGX_API_KEY?.trim();
+const BINGX_SECRET_KEY = process.env.BINGX_SECRET_KEY?.trim();
 
 const BINGX_BASE_URL = 'https://open-api.bingx.com';
+
+function buildCanonical(params: Record<string, string | number>) {
+  return Object.keys(params)
+    .sort()
+    .map((key) => `${key}=${params[key]}`)
+    .join('&');
+}
 
 function signParams(params: Record<string, string | number>) {
   if (!BINGX_SECRET_KEY) {
     throw new Error('Falta BINGX_SECRET_KEY en Vercel.');
   }
 
-  const queryString = Object.entries(params)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
-    .join('&');
+  const canonical = buildCanonical(params);
 
   const signature = crypto
     .createHmac('sha256', BINGX_SECRET_KEY)
-    .update(queryString)
+    .update(canonical)
     .digest('hex');
 
   return {
-    queryString,
+    canonical,
     signature,
   };
 }
@@ -78,18 +82,19 @@ export async function GET(request: Request) {
     const endpoint = '/openApi/spot/v1/account/balance';
 
     const params = {
-      recvWindow: 60000,
+      recvWindow: 5000,
       timestamp: Date.now(),
     };
 
-    const { queryString, signature } = signParams(params);
+    const { canonical, signature } = signParams(params);
 
-    const bingxUrl = `${BINGX_BASE_URL}${endpoint}?${queryString}&signature=${signature}`;
+    const bingxUrl = `${BINGX_BASE_URL}${endpoint}?${canonical}&signature=${signature}`;
 
     const bingxResponse = await fetch(bingxUrl, {
       method: 'GET',
       headers: {
         'X-BX-APIKEY': BINGX_API_KEY,
+        'X-SOURCE-KEY': 'BX-AI-SKILL',
       },
       cache: 'no-store',
     });
@@ -118,7 +123,7 @@ export async function GET(request: Request) {
       connected,
       message: connected
         ? 'Conexión con BingX exitosa. La API Key y la firma funcionan.'
-        : 'BingX respondió, pero no confirmó conexión exitosa. Revisá el código y mensaje devuelto.',
+        : 'BingX respondió, pero todavía no confirmó conexión exitosa. Revisá bingx_code y bingx_message.',
       env_check: {
         BINGX_API_KEY: true,
         BINGX_SECRET_KEY: true,
@@ -128,7 +133,7 @@ export async function GET(request: Request) {
       bingx_code: bingxCode,
       bingx_message: bingxMessage,
       note:
-        'Por seguridad no se muestran balances ni datos sensibles completos en esta prueba.',
+        'Si sigue diciendo Incorrect apiKey, la clave está mal copiada, está vencida, fue creada en otra sección o BingX no la reconoce para esta API.',
     });
   } catch (error) {
     return NextResponse.json(
